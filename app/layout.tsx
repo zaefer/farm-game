@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-
+import BanGuard from "@/components/BanGuard";
 import { GameProvider } from "@/context/GameContext";
 
 const geistSans = Geist({
@@ -33,6 +33,7 @@ export default function RootLayout({
         suppressHydrationWarning
         className="min-h-full flex flex-col"
       >
+        <BanGuard />
         <GameProvider>{children}</GameProvider>
       </body>
     </html>

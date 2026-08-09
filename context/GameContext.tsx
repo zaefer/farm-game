@@ -176,21 +176,21 @@ export function GameProvider({
   // LOAD GAME FROM SUPABASE
   // ====================================================
 
-  const refreshGame =
-    useCallback(async () => {
-      setLoading(true);
-      setError(null);
+    const refreshGame =
+      useCallback(async () => {
+        try {
+          // ----------------------------------------------
+          // USER
+          // ----------------------------------------------
 
-      try {
-        // ----------------------------------------------
-        // USER
-        // ----------------------------------------------
+          const {
+            data: userData,
+            error: userError,
+          } =
+            await supabase.auth.getUser();
 
-        const {
-          data: userData,
-          error: userError,
-        } =
-          await supabase.auth.getUser();
+          setLoading(true);
+          setError(null);
 
         if (
           userError ||
@@ -470,9 +470,15 @@ export function GameProvider({
   // SAYFA DEĞİŞİNCE FARM'I YENİDEN ÇEK
   // ====================================================
 
-  useEffect(() => {
-    void refreshGame();
-  }, [pathname, refreshGame]);
+    useEffect(() => {
+      const timer = window.setTimeout(() => {
+        void refreshGame();
+      }, 0);
+
+      return () => {
+        window.clearTimeout(timer);
+      };
+    }, [pathname, refreshGame]);
 
 
   // ====================================================

@@ -223,26 +223,11 @@ export default async function PlayerDetailPage({
       );
 
 
-  const now =
-    Date.now();
-
-
   const activeBan =
-    bans?.find((ban) => {
-      if (!ban.is_active) {
-        return false;
-      }
-
-      if (!ban.expires_at) {
-        return true;
-      }
-
-      return (
-        new Date(
-          ban.expires_at
-        ).getTime() > now
-      );
-    }) ?? null;
+    bans?.find(
+      (ban) =>
+        ban.is_active
+    ) ?? null;
 
 
   // =====================================================
@@ -510,9 +495,9 @@ export default async function PlayerDetailPage({
               Ban Management
             </h2>
 
-            <p className="mt-1 text-sm text-white/40">
-              Control this player's access to the game.
-            </p>
+           <p className="mt-1 text-sm text-white/40">
+            Control this player&apos;s access to the game.
+          </p>
 
 
             {activeBan ? (

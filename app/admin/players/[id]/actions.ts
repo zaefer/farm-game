@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+
 type BanOption =
   | "1h"
   | "24h"
@@ -13,6 +14,7 @@ type BanOption =
   | "7d"
   | "30d"
   | "permanent";
+
 
 const BAN_OPTIONS: Record<
   BanOption,
@@ -53,7 +55,6 @@ const BAN_OPTIONS: Record<
   },
 
   permanent: {
-    // Supabase'in resmi örneğindeki 100 yıllık ban.
     authDuration: "876000h",
     milliseconds: null,
     label: "Permanent",
@@ -66,26 +67,44 @@ const BAN_OPTIONS: Record<
 // ======================================================
 
 async function requireAdmin() {
-  const supabase = await createClient();
+  const supabase =
+    await createClient();
+
 
   const {
-    data: { user },
+    data: {
+      user,
+    },
     error,
-  } = await supabase.auth.getUser();
+  } =
+    await supabase.auth.getUser();
 
-  if (error || !user) {
+
+  if (
+    error ||
+    !user
+  ) {
     redirect("/login");
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
 
-  if (!profile || profile.role !== "admin") {
+  const {
+    data: profile,
+  } =
+    await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+
+  if (
+    !profile ||
+    profile.role !== "admin"
+  ) {
     redirect("/");
   }
+
 
   return user;
 }
@@ -98,40 +117,64 @@ async function requireAdmin() {
 export async function banPlayer(
   formData: FormData
 ) {
-  const currentAdmin = await requireAdmin();
-
-  const targetUserId = String(
-    formData.get("targetUserId") ?? ""
-  );
-
-  const reason = String(
-    formData.get("reason") ?? ""
-  ).trim();
-
-  const adminNote = String(
-    formData.get("adminNote") ?? ""
-  ).trim();
-
-  const duration = String(
-    formData.get("duration") ?? ""
-  ) as BanOption;
+  const currentAdmin =
+    await requireAdmin();
 
 
-  // ----------------------------------------------------
+  const targetUserId =
+    String(
+      formData.get(
+        "targetUserId"
+      ) ?? ""
+    );
+
+
+  const reason =
+    String(
+      formData.get(
+        "reason"
+      ) ?? ""
+    ).trim();
+
+
+  const adminNote =
+    String(
+      formData.get(
+        "adminNote"
+      ) ?? ""
+    ).trim();
+
+
+  const duration =
+    String(
+      formData.get(
+        "duration"
+      ) ?? ""
+    ) as BanOption;
+
+
+  // ====================================================
   // VALIDATION
-  // ----------------------------------------------------
+  // ====================================================
 
   if (!targetUserId) {
-    redirect("/admin/players");
+    redirect(
+      "/admin/players"
+    );
   }
 
-  if (currentAdmin.id === targetUserId) {
+
+  if (
+    currentAdmin.id ===
+    targetUserId
+  ) {
     redirect(
       `/admin/players/${targetUserId}?error=${encodeURIComponent(
         "You cannot ban yourself."
       )}`
     );
   }
+
 
   if (
     reason.length < 3 ||
@@ -144,7 +187,10 @@ export async function banPlayer(
     );
   }
 
-  if (adminNote.length > 1000) {
+
+  if (
+    adminNote.length > 1000
+  ) {
     redirect(
       `/admin/players/${targetUserId}?error=${encodeURIComponent(
         "Admin note is too long."
@@ -152,8 +198,10 @@ export async function banPlayer(
     );
   }
 
+
   const banConfig =
     BAN_OPTIONS[duration];
+
 
   if (!banConfig) {
     redirect(
@@ -164,21 +212,32 @@ export async function banPlayer(
   }
 
 
-  const admin = createAdminClient();
+  const admin =
+    createAdminClient();
 
 
-  // ----------------------------------------------------
+  // ====================================================
   // TARGET CHECK
-  // ----------------------------------------------------
+  // ====================================================
 
   const {
     data: targetProfile,
     error: targetProfileError,
-  } = await admin
-    .from("profiles")
-    .select("role, username")
-    .eq("id", targetUserId)
-    .single();
+  } =
+    await admin
+      .from("profiles")
+      .select(
+        `
+          role,
+          username
+        `
+      )
+      .eq(
+        "id",
+        targetUserId
+      )
+      .single();
+
 
   if (
     targetProfileError ||
@@ -192,8 +251,10 @@ export async function banPlayer(
   }
 
 
-  // İlk sürümde admin banlamaya izin vermiyoruz.
-  if (targetProfile.role === "admin") {
+  if (
+    targetProfile.role ===
+    "admin"
+  ) {
     redirect(
       `/admin/players/${targetUserId}?error=${encodeURIComponent(
         "Admin accounts cannot be banned from this panel."
@@ -202,11 +263,13 @@ export async function banPlayer(
   }
 
 
-  // ----------------------------------------------------
+  // ====================================================
   // SUPABASE AUTH BAN
-  // ----------------------------------------------------
+  // ====================================================
 
-  const { error: banError } =
+  const {
+    error: banError,
+  } =
     await admin.auth.admin.updateUserById(
       targetUserId,
       {
@@ -214,6 +277,7 @@ export async function banPlayer(
           banConfig.authDuration,
       }
     );
+
 
   if (banError) {
     redirect(
@@ -224,25 +288,32 @@ export async function banPlayer(
   }
 
 
-  // ----------------------------------------------------
-  // OLD ACTIVE RECORDS
-  // ----------------------------------------------------
+  // ====================================================
+  // CLOSE OLD ACTIVE BAN RECORDS
+  // ====================================================
 
   await admin
     .from("player_bans")
     .update({
       is_active: false,
     })
-    .eq("user_id", targetUserId)
-    .eq("is_active", true);
+    .eq(
+      "user_id",
+      targetUserId
+    )
+    .eq(
+      "is_active",
+      true
+    );
 
 
-  // ----------------------------------------------------
+  // ====================================================
   // EXPIRATION
-  // ----------------------------------------------------
+  // ====================================================
 
   const expiresAt =
-    banConfig.milliseconds === null
+    banConfig.milliseconds ===
+    null
       ? null
       : new Date(
           Date.now() +
@@ -250,39 +321,53 @@ export async function banPlayer(
         ).toISOString();
 
 
-  // ----------------------------------------------------
-  // SAVE BAN HISTORY
-  // ----------------------------------------------------
+  // ====================================================
+  // BAN HISTORY
+  // ====================================================
 
-  const { error: logError } = await admin
-    .from("player_bans")
-    .insert({
-      user_id: targetUserId,
+  const {
+    data: createdBan,
+    error: banHistoryError,
+  } =
+    await admin
+      .from("player_bans")
+      .insert({
+        user_id:
+          targetUserId,
 
-      admin_id: currentAdmin.id,
+        admin_id:
+          currentAdmin.id,
 
-      reason,
+        reason,
 
-      admin_note:
-        adminNote || null,
+        admin_note:
+          adminNote ||
+          null,
 
-      duration:
-        banConfig.label,
+        duration:
+          banConfig.label,
 
-      expires_at: expiresAt,
+        expires_at:
+          expiresAt,
 
-      is_active: true,
-    });
+        is_active:
+          true,
+      })
+      .select("id")
+      .single();
 
 
-  // Log yazılamadıysa banı geri almaya çalış.
-  if (logError) {
+  // Ban geçmişi oluşamadıysa
+  // Auth banını geri al.
+  if (banHistoryError) {
     await admin.auth.admin.updateUserById(
       targetUserId,
       {
-        ban_duration: "none",
+        ban_duration:
+          "none",
       }
     );
+
 
     redirect(
       `/admin/players/${targetUserId}?error=${encodeURIComponent(
@@ -292,6 +377,59 @@ export async function banPlayer(
   }
 
 
+  // ====================================================
+  // ADMIN LOG
+  // ====================================================
+
+  const {
+    error: adminLogError,
+  } =
+    await admin
+      .from("admin_logs")
+      .insert({
+        admin_id:
+          currentAdmin.id,
+
+        action:
+          "BAN_PLAYER",
+
+        target_user_id:
+          targetUserId,
+
+        metadata: {
+          username:
+            targetProfile.username,
+
+          reason,
+
+          duration:
+            banConfig.label,
+
+          expires_at:
+            expiresAt,
+
+          ban_record_id:
+            createdBan.id,
+
+          admin_note:
+            adminNote ||
+            null,
+        },
+      });
+
+
+  if (adminLogError) {
+    console.error(
+      "Ban admin log error:",
+      adminLogError
+    );
+  }
+
+
+  // ====================================================
+  // REFRESH
+  // ====================================================
+
   revalidatePath(
     `/admin/players/${targetUserId}`
   );
@@ -299,6 +437,15 @@ export async function banPlayer(
   revalidatePath(
     "/admin/players"
   );
+
+  revalidatePath(
+    "/admin/bans"
+  );
+
+  revalidatePath(
+    "/admin/logs"
+  );
+
 
   redirect(
     `/admin/players/${targetUserId}?success=${encodeURIComponent(
@@ -315,34 +462,68 @@ export async function banPlayer(
 export async function unbanPlayer(
   formData: FormData
 ) {
-  const currentAdmin = await requireAdmin();
+  const currentAdmin =
+    await requireAdmin();
 
-  const targetUserId = String(
-    formData.get("targetUserId") ?? ""
-  );
+
+  const targetUserId =
+    String(
+      formData.get(
+        "targetUserId"
+      ) ?? ""
+    );
 
 
   if (!targetUserId) {
-    redirect("/admin/players");
+    redirect(
+      "/admin/players"
+    );
   }
 
 
-  const admin = createAdminClient();
+  const admin =
+    createAdminClient();
 
 
-  // ----------------------------------------------------
-  // ADMIN TARGET PROTECTION
-  // ----------------------------------------------------
+  // ====================================================
+  // TARGET
+  // ====================================================
 
-  const { data: targetProfile } =
+  const {
+    data: targetProfile,
+    error: targetProfileError,
+  } =
     await admin
       .from("profiles")
-      .select("role")
-      .eq("id", targetUserId)
+      .select(
+        `
+          role,
+          username
+        `
+      )
+      .eq(
+        "id",
+        targetUserId
+      )
       .single();
 
 
-  if (targetProfile?.role === "admin") {
+  if (
+    targetProfileError ||
+    !targetProfile
+  ) {
+    redirect(
+      `/admin/players?error=${encodeURIComponent(
+        "Player could not be found."
+      )}`
+    );
+  }
+
+
+  if (
+    targetProfile.role ===
+    "admin"
+  ) {
     redirect(
       `/admin/players/${targetUserId}?error=${encodeURIComponent(
         "Admin accounts are protected."
@@ -351,15 +532,53 @@ export async function unbanPlayer(
   }
 
 
-  // ----------------------------------------------------
-  // AUTH UNBAN
-  // ----------------------------------------------------
+  // ====================================================
+  // FIND CURRENT BAN
+  // ====================================================
 
-  const { error: unbanError } =
+  const {
+    data: activeBan,
+  } =
+    await admin
+      .from("player_bans")
+      .select(
+        `
+          id,
+          reason,
+          duration,
+          expires_at
+        `
+      )
+      .eq(
+        "user_id",
+        targetUserId
+      )
+      .eq(
+        "is_active",
+        true
+      )
+      .order(
+        "banned_at",
+        {
+          ascending: false,
+        }
+      )
+      .limit(1)
+      .maybeSingle();
+
+
+  // ====================================================
+  // AUTH UNBAN
+  // ====================================================
+
+  const {
+    error: unbanError,
+  } =
     await admin.auth.admin.updateUserById(
       targetUserId,
       {
-        ban_duration: "none",
+        ban_duration:
+          "none",
       }
     );
 
@@ -373,30 +592,104 @@ export async function unbanPlayer(
   }
 
 
-  // ----------------------------------------------------
-  // HISTORY
-  // ----------------------------------------------------
+  const unbannedAt =
+    new Date()
+      .toISOString();
 
-  await admin
-    .from("player_bans")
-    .update({
-      is_active: false,
 
-      unbanned_at:
-        new Date().toISOString(),
+  // ====================================================
+  // UPDATE BAN HISTORY
+  // ====================================================
 
-      unbanned_by:
-        currentAdmin.id,
-    })
-    .eq(
-      "user_id",
-      targetUserId
-    )
-    .eq(
-      "is_active",
-      true
+  const {
+    error: historyError,
+  } =
+    await admin
+      .from("player_bans")
+      .update({
+        is_active:
+          false,
+
+        unbanned_at:
+          unbannedAt,
+
+        unbanned_by:
+          currentAdmin.id,
+      })
+      .eq(
+        "user_id",
+        targetUserId
+      )
+      .eq(
+        "is_active",
+        true
+      );
+
+
+  if (historyError) {
+    console.error(
+      "Unban history error:",
+      historyError
     );
+  }
 
+
+  // ====================================================
+  // ADMIN LOG
+  // ====================================================
+
+  const {
+    error: adminLogError,
+  } =
+    await admin
+      .from("admin_logs")
+      .insert({
+        admin_id:
+          currentAdmin.id,
+
+        action:
+          "UNBAN_PLAYER",
+
+        target_user_id:
+          targetUserId,
+
+        metadata: {
+          username:
+            targetProfile.username,
+
+          previous_ban_id:
+            activeBan?.id ??
+            null,
+
+          previous_reason:
+            activeBan?.reason ??
+            null,
+
+          previous_duration:
+            activeBan?.duration ??
+            null,
+
+          previous_expires_at:
+            activeBan?.expires_at ??
+            null,
+
+          unbanned_at:
+            unbannedAt,
+        },
+      });
+
+
+  if (adminLogError) {
+    console.error(
+      "Unban admin log error:",
+      adminLogError
+    );
+  }
+
+
+  // ====================================================
+  // REFRESH
+  // ====================================================
 
   revalidatePath(
     `/admin/players/${targetUserId}`
@@ -404,6 +697,14 @@ export async function unbanPlayer(
 
   revalidatePath(
     "/admin/players"
+  );
+
+  revalidatePath(
+    "/admin/bans"
+  );
+
+  revalidatePath(
+    "/admin/logs"
   );
 
 
